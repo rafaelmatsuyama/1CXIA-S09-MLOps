@@ -61,6 +61,9 @@ cat <<EOF > train.py
 import mlflow
 import random
 
+# Forçar persistência em banco local (Senior Governance)
+mlflow.set_tracking_uri("sqlite:///mlflow.db")
+
 # Iniciar o rastro (Tracking)
 with mlflow.start_run(run_name="Experimento_BERT_V1"):
     # 1. Logar Parâmetros (Configurações)
@@ -78,7 +81,7 @@ EOF
 # Rodar o treino
 python3 train.py
 ```
-*Observe que uma pasta `mlruns/` foi criada. O MLflow salvou tudo em arquivos locais.*
+*Observe que o arquivo mlflow.db foi criado. O MLflow salvou tudo em uma base local.*
 
 ---
 
@@ -94,7 +97,7 @@ Como a interface Web pode ser pesada, aprenderemos a extrair o rastro diretament
     ```bash
     mlflow runs list --experiment-id 0
     ```
-3.  **Desafio:** Rode o `train.py` novamente. Note que um novo `run_id` será gerado com uma acurácia diferente. A "memória" do seu modelo está sendo construída na pasta `mlruns`.
+3.  **Desafio:** Rode o `train.py` novamente. Note que um novo `run_id` será gerado com uma acurácia diferente. A "memória" do seu modelo está sendo construída na base `mlflow.db`.
 
 ---
 
@@ -113,6 +116,9 @@ cat <<EOF > register_model.py
 import mlflow
 import mlflow.sklearn
 from sklearn.linear_model import LogisticRegression
+
+# Forçar persistência em banco local (Senior Governance)
+mlflow.set_tracking_uri("sqlite:///mlflow.db")
 
 # Iniciar uma run para registro
 with mlflow.start_run(run_name="Registro_Oficial_CAIXA"):
@@ -188,8 +194,9 @@ steps:
   displayName: 'Executar Treino e Tracking'
 
 - script: |
-    # Capturar o Run ID do MLflow
-    RUN_ID=$(ls mlruns/0 | grep -v "meta.yaml" | head -n 1)
+    # Capturar o Run ID do MLflow usando Python (Sênior e Independente de Backend)
+    source venv_ci/bin/activate
+    RUN_ID=$(python3 -c "import mlflow; from mlflow.tracking import MlflowClient; client = MlflowClient(); run = client.search_runs(experiment_ids=['0'], max_results=1, order_by=['attribute.start_time DESC'])[0]; print(run.info.run_id)")
     echo "##vso[task.setvariable variable=MLFLOW_RUN_ID]$RUN_ID"
     echo "Modelo Validado! MLflow Run ID: $RUN_ID"
   displayName: 'Registrar Linhagem de Auditoria'
@@ -226,6 +233,7 @@ nameserver 8.8.4.4
 EOF
 
 # 2. Configuração (Substitua os valores <...>)
+sudo chmod -R 777 /home/agentuser/myagent
 sudo -u agentuser bash -c "cd ~/myagent && ./config.sh --unattended \
   --url https://dev.azure.com/<SUA_ORGANIZACAO> \
   --auth pat \
